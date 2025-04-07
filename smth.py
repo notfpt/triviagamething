@@ -243,12 +243,21 @@ def run_quiz(category):
             penalty_time = 0  # Reset penalty time if no redo
     # After all questions
     print(f"Final score: {score}")
+    if score == 150:
+        print("Congratulations! You are a geography/history/science master!")
+    elif score >= 100:
+        print("Great job! You have a good grasp of geography/history/science.")
+    elif score >= 50:
+        print("I know this is intentional")
+    else:
+        print("Cool")
     print("Press Enter to return to menu or 'r' to restart")
     while True:
         if restart_flag:
             return 'restart'
         key = input_queue.get()
         if key == 'enter':
+            
             break
         elif key == 'r':
             return 'restart'
