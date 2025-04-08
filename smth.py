@@ -1,283 +1,510 @@
-# balls version
-import os
+# I hope this is the last version
 import time
 import random
-from pynput import keyboard
-import queue
 import threading
+import sys
+from pynput import keyboard
+from os import system, name
 
-# Define the questions for each category and difficulty level
-questions = {
-    'Geography': {
-        'easy': [
-            {'question': 'What is the capital of France?', 'options': ['a) Paris', 'b) London', 'c) Berlin', 'd) Madrid'], 'answer': 'a'},
-            {'question': 'Which continent is the largest?', 'options': ['a) Asia', 'b) Africa', 'c) North America', 'd) Europe'], 'answer': 'a'},
-            {'question': 'What ocean is the largest?', 'options': ['a) Pacific', 'b) Atlantic', 'c) Indian', 'd) Arctic'], 'answer': 'a'},
-            {'question': 'What is the capital of Brazil?', 'options': ['a) Rio', 'b) São Paulo', 'c) Brasília', 'd) Salvador'], 'answer': 'c'},
-            {'question': 'Which country has the most deserts?', 'options': ['a) Australia', 'b) Egypt', 'c) Canada', 'd) Brazil'], 'answer': 'a'}
-        ],
-        'average': [
-            {'question': 'What is the longest river?', 'options': ['a) Nile', 'b) Amazon', 'c) Yangtze', 'd) Mississippi'], 'answer': 'a'},
-            {'question': 'Which country has the most population?', 'options': ['a) India', 'b) China', 'c) USA', 'd) Russia'], 'answer': 'b'},
-            {'question': 'What is the capital of Japan?', 'options': ['a) Osaka', 'b) Kyoto', 'c) Tokyo', 'd) Hiroshima'], 'answer': 'c'},
-            {'question': 'Which continent has the most countries?', 'options': ['a) Asia', 'b) Africa', 'c) Europe', 'd) South America'], 'answer': 'b'},
-            {'question': 'What sea borders Turkey?', 'options': ['a) Black Sea', 'b) Red Sea', 'c) Caspian Sea', 'd) Yellow Sea'], 'answer': 'a'}
-        ],
-        'hard': [
-            {'question': 'What is the smallest country by area?', 'options': ['a) Vatican City', 'b) Monaco', 'c) Nauru', 'd) San Marino'], 'answer': 'a'},
-            {'question': 'Which country has the longest coastline?', 'options': ['a) Canada', 'b) Russia', 'c) Australia', 'd) USA'], 'answer': 'a'},
-            {'question': 'What is the highest mountain?', 'options': ['a) Everest', 'b) K2', 'c) Kangchenjunga', 'd) Lhotse'], 'answer': 'a'},
-            {'question': 'Which desert is the largest?', 'options': ['a) Sahara', 'b) Gobi', 'c) Antarctic', 'd) Arabian'], 'answer': 'c'},
-            {'question': 'What river flows through Egypt?', 'options': ['a) Nile', 'b) Congo', 'c) Amazon', 'd) Euphrates'], 'answer': 'a'}
-        ]
-    },
-    'History': {
-        'easy': [
-            {'question': 'First US President?', 'options': ['a) Washington', 'b) Jefferson', 'c) Lincoln', 'd) Adams'], 'answer': 'a'},
-            {'question': 'Who discovered America?', 'options': ['a) Columbus', 'b) Magellan', 'c) Drake', 'd) Cook'], 'answer': 'a'},
-            {'question': 'When did WWI start?', 'options': ['a) 1914', 'b) 1918', 'c) 1939', 'd) 1945'], 'answer': 'a'},
-            {'question': 'Who built the pyramids?', 'options': ['a) Egyptians', 'b) Romans', 'c) Greeks', 'd) Persians'], 'answer': 'a'},
-            {'question': 'What empire fell in 1453?', 'options': ['a) Byzantine', 'b) Roman', 'c) Ottoman', 'd) Mongol'], 'answer': 'a'}
-        ],
-        'average': [
-            {'question': 'WWII end year?', 'options': ['a) 1945', 'b) 1939', 'c) 1918', 'd) 1960'], 'answer': 'a'},
-            {'question': 'Who wrote the Declaration?', 'options': ['a) Jefferson', 'b) Washington', 'c) Franklin', 'd) Adams'], 'answer': 'a'},
-            {'question': 'What year was the French Revolution?', 'options': ['a) 1789', 'b) 1812', 'c) 1756', 'd) 1848'], 'answer': 'a'},
-            {'question': 'Who was Cleopatra?', 'options': ['a) Queen of Egypt', 'b) Roman Empress', 'c) Greek Philosopher', 'd) Persian Ruler'], 'answer': 'a'},
-            {'question': 'What war ended in 1865?', 'options': ['a) Civil War', 'b) Revolutionary War', 'c) WWI', 'd) WWII'], 'answer': 'a'}
-        ],
-        'hard': [
-            {'question': 'Longest-reigning monarch?', 'options': ['a) Elizabeth II', 'b) Victoria', 'c) George III', 'd) Henry VIII'], 'answer': 'a'},
-            {'question': 'Who ended feudalism in Japan?', 'options': ['a) Meiji', 'b) Tokugawa', 'c) Hideyoshi', 'd) Nobunaga'], 'answer': 'a'},
-            {'question': 'What treaty ended WWI?', 'options': ['a) Versailles', 'b) Trianon', 'c) Brest-Litovsk', 'd) Paris'], 'answer': 'a'},
-            {'question': 'Who was the first Roman Emperor?', 'options': ['a) Augustus', 'b) Nero', 'c) Julius Caesar', 'd) Tiberius'], 'answer': 'a'},
-            {'question': 'What year did the Berlin Wall fall?', 'options': ['a) 1989', 'b) 1991', 'c) 1975', 'd) 1961'], 'answer': 'a'}
-        ]
-    },
-    'Science': {
-        'easy': [
-            {'question': 'Water’s chemical symbol?', 'options': ['a) H2O', 'b) CO2', 'c) O2', 'd) NaCl'], 'answer': 'a'},
-            {'question': 'What gas do we breathe?', 'options': ['a) Oxygen', 'b) Nitrogen', 'c) Carbon Dioxide', 'd) Helium'], 'answer': 'a'},
-            {'question': 'What planet is closest to the sun?', 'options': ['a) Mercury', 'b) Venus', 'c) Earth', 'd) Mars'], 'answer': 'a'},
-            {'question': 'What is 2 + 2?', 'options': ['a) 4', 'b) 3', 'c) 5', 'd) 6'], 'answer': 'a'},
-            {'question': 'What force pulls objects down?', 'options': ['a) Gravity', 'b) Magnetism', 'c) Friction', 'd) Pressure'], 'answer': 'a'}
-        ],
-        'average': [
-            {'question': 'Speed of light?', 'options': ['a) 300,000 km/s', 'b) 150,000 km/s', 'c) 450,000 km/s', 'd) 600,000 km/s'], 'answer': 'a'},
-            {'question': 'What element is diamond?', 'options': ['a) Carbon', 'b) Silicon', 'c) Gold', 'd) Iron'], 'answer': 'a'},
-            {'question': 'Who proposed relativity?', 'options': ['a) Einstein', 'b) Newton', 'c) Galileo', 'd) Hawking'], 'answer': 'a'},
-            {'question': 'What is the largest organ?', 'options': ['a) Skin', 'b) Liver', 'c) Heart', 'd) Brain'], 'answer': 'a'},
-            {'question': 'What gas is most in the atmosphere?', 'options': ['a) Nitrogen', 'b) Oxygen', 'c) CO2', 'd) Argon'], 'answer': 'a'}
-        ],
-        'hard': [
-            {'question': 'Heisenberg Principle?', 'options': ['a) Position and momentum', 'b) Energy and time', 'c) Both', 'd) None'], 'answer': 'c'},
-            {'question': 'What particle has no charge?', 'options': ['a) Neutron', 'b) Proton', 'c) Electron', 'd) Photon'], 'answer': 'a'},
-            {'question': 'What’s the strongest fundamental force?', 'options': ['a) Strong nuclear', 'b) Electromagnetic', 'c) Weak nuclear', 'd) Gravity'], 'answer': 'a'},
-            {'question': 'Who discovered penicillin?', 'options': ['a) Fleming', 'b) Pasteur', 'c) Lister', 'd) Salk'], 'answer': 'a'},
-            {'question': 'What is E=mc²?', 'options': ['a) Mass-energy equivalence', 'b) Force equation', 'c) Momentum', 'd) Kinetic energy'], 'answer': 'a'}
-        ]
-    }
-}
-
-# Points for each difficulty level
-points_per_difficulty = {'easy': 5, 'average': 10, 'hard': 15}
-
-# Global variables for input handling
-input_queue = queue.Queue()
-restart_flag = False
-
-# Keyboard listener callback
-def on_press(key):
-    global restart_flag
-    try:
-        char = key.char
-        if char == 'r':
-            restart_flag = True
-        elif char in ['a', 'b', 'c', 'd', 'u']:
-            input_queue.put(char)
-    except AttributeError:
-        if key == keyboard.Key.right:
-            input_queue.put('right')
-        elif key == keyboard.Key.enter:
-            input_queue.put('enter')
-
-# Start the keyboard listener
-listener = keyboard.Listener(on_press=on_press)
-listener.start()
-
-# Function to clear the screen
-def cls():
-    os.system('cls' if os.name == 'nt' else 'clear')
-
-# Function to display the menu with highlighting
-def print_menu(selected):
-    options = ['Geography', 'History', 'Science', 'Exit']
-    for i, option in enumerate(options):
-        if i == selected:
-            print(f'\033[1;32m> {option}\033[0m')  # Highlighted in green
-        else:
-            print(f'  {option}')
-
-# Menu system
-def menu():
-    global restart_flag
-    current_selection = 0
-    options = ['Geography', 'History', 'Science', 'Exit']
-    while True:
-        if restart_flag:
-            restart_flag = False
-            return 'restart'
-        os.system('cls' if os.name == 'nt' else 'clear')
-        print_menu(current_selection)
-        key = input_queue.get()  # Wait for key press
-        if key == 'right':
-            current_selection = (current_selection + 1) % 4
-        elif key == 'enter':
-            return options[current_selection]
-
-# Function to ask a question with timer
-def ask_question(question, difficulty, timer_duration, penalty_time=0):
-    cls()
-    print(question['question'])
-    for option in question['options']:
-        print(option)
-
-    start_time = time.time()
-    answer_selected = None
-    timer_expired = False
-    stop_timer = threading.Event()  # Event to signal the timer to stop
-
-    def countdown():
-        nonlocal timer_expired
-        while not stop_timer.is_set():
-            elapsed_time = time.time() - start_time
-            remaining_time = timer_duration - penalty_time - elapsed_time
-            if remaining_time <= 0:
-                timer_expired = True
-                print("\rTime remaining: 0 seconds", end="", flush=True)
-                break
-            print(f"Time remaining: {int(remaining_time)} seconds\r", end="\r")
-            time.sleep(1)
-        if timer_expired:
-            print("\nTime's up! Moving to the next question.")
-
-    # Start the countdown timer in a separate thread
-    timer_thread = threading.Thread(target=countdown)
-    timer_thread.start()
-
-    # Handle user input
-    while not timer_expired:
-        if restart_flag:
-            stop_timer.set()  # Stop the timer
-            timer_thread.join()  # Wait for the timer thread to finish
-            return 'restart', 0
-        if not input_queue.empty():
-            key = input_queue.get()
-            if key in ['a', 'b', 'c', 'd']:
-                answer_selected = key
-            elif key == 'enter' and answer_selected is not None:
-                stop_timer.set()  # Stop the timer
-                timer_thread.join()  # Wait for the timer thread to finish
-                if answer_selected == question['answer']:
-                    points = points_per_difficulty[difficulty]
-                    return True, points
-                else:
-                    return False, 0
-        time.sleep(0.01)  # Prevent busy waiting
-
-    # If the timer expires, return a timeout result
-    stop_timer.set()  # Ensure the timer stops
-    timer_thread.join()  # Ensure the timer thread finishes
-    return False, 0  # Timeout
-
-# Post-question feedback and options
-def post_question(correct, score, question):
-    cls()
-    print(f"{'Correct!' if correct else 'Wrong!'} Score: {score}")
-    print(f"The correct answer was: {question['answer']}")
-    if not correct:
-        print("Press 'u' to redo (half-time penalty), 'r' to restart, or Enter to continue")
-    else:
-        print("Press 'r' to restart or Enter to continue")
-    while True:
-        if restart_flag:
-            return 'restart'
-        key = input_queue.get()
-        if key == 'r':
-            return 'restart'
-        elif key == 'enter':
-            return 'continue'
-        elif key == 'u' and not correct:
-            return 'redo'
-
-# Run the quiz for a selected category
-def run_quiz(category):
-    global restart_flag
-    # Shuffle questions within each difficulty
-    easy = questions[category]['easy'][:]
-    random.shuffle(easy)
-    average = questions[category]['average'][:]
-    random.shuffle(average)
-    hard = questions[category]['hard'][:]
-    random.shuffle(hard)
-    all_questions = [(q, 'easy') for q in easy] + [(q, 'average') for q in average] + [(q, 'hard') for q in hard]
-    score = 0
-    penalty_time = 0  # Initialize penalty time
-    for question, difficulty in all_questions:
-        if restart_flag:
-            return 'restart'
-        result, points = ask_question(question, difficulty, 15, penalty_time)
-        if result == 'restart':
-            return 'restart'
-        score += points
-        action = post_question(result, score, question)
-        if action == 'restart':
-            return 'restart'
-        elif action == 'redo':
-            redo_result, redo_points = ask_question(question, difficulty, 15, penalty_time=7.5)
-            if redo_result == 'restart':
-                return 'restart'
-            score += redo_points
-            penalty_time = 7.5  # Apply half-time penalty for the next question
-        else:
-            penalty_time = 0  # Reset penalty time if no redo
-    # After all questions
-    print(f"Final score: {score}")
-    if score == 150:
-        print("Congratulations! You are a geography/history/science master!")
-    elif score >= 100:
-        print("Great job! You have a good grasp of geography/history/science.")
-    elif score >= 50:
-        print("I know this is intentional")
-    else:
-        print("Cool")
-    print("Press Enter to return to menu or 'r' to restart")
-    while True:
-        if restart_flag:
-            return 'restart'
-        key = input_queue.get()
-        if key == 'enter':
+class TriviaGame:
+    def __init__(self):
+        # Game state
+        self.running = True
+        self.in_menu = True
+        self.in_question = False
+        self.menu_index = 0
+        self.current_score = 0
+        self.current_category = ""
+        self.current_difficulty = ""
+        self.current_question_index = 0
+        self.questions_in_round = []
+        self.timer_thread = None
+        self.time_remaining = 15
+        self.halved_timer = False
+        self.user_selection = None
+        self.last_correct = False
+        self.timer_active = False
+        self.waiting_for_post_action = False
+        
+        # Menu options
+        self.menu_options = ["Geography", "History", "Science", "Exit"]
+        self.difficulty_levels = ["Easy", "Average", "Hard"]
+        
+        # Questions database
+        self.questions = {
+            "Geography": {
+                "Easy": [
+                    {"question": "What is the capital of France?", 
+                     "options": ["Berlin", "Paris", "Madrid", "Rome"], 
+                     "answer": "Paris"},
+                    {"question": "Which ocean is the largest?", 
+                     "options": ["Atlantic", "Indian", "Arctic", "Pacific"], 
+                     "answer": "Pacific"},
+                    {"question": "What is the longest river in the world?", 
+                     "options": ["Amazon", "Nile", "Mississippi", "Yangtze"], 
+                     "answer": "Nile"},
+                    {"question": "Which continent is the largest by land area?", 
+                     "options": ["North America", "Europe", "Asia", "Africa"], 
+                     "answer": "Asia"},
+                    {"question": "What is the capital of Japan?", 
+                     "options": ["Tokyo", "Beijing", "Seoul", "Bangkok"], 
+                     "answer": "Tokyo"},
+                ],
+                "Average": [
+                    {"question": "Which country has the most islands in the world?", 
+                     "options": ["Indonesia", "Philippines", "Sweden", "Greece"], 
+                     "answer": "Sweden"},
+                    {"question": "What is the smallest country in the world?", 
+                     "options": ["Monaco", "Nauru", "Vatican City", "San Marino"], 
+                     "answer": "Vatican City"},
+                    {"question": "Which mountain range separates Europe from Asia?", 
+                     "options": ["Alps", "Himalayas", "Andes", "Urals"], 
+                     "answer": "Urals"},
+                    {"question": "Which African country was formerly known as Abyssinia?", 
+                     "options": ["Ethiopia", "Sudan", "Somalia", "Kenya"], 
+                     "answer": "Ethiopia"},
+                    {"question": "Which strait separates Asia from North America?", 
+                     "options": ["Strait of Gibraltar", "Strait of Magellan", "Bering Strait", "Strait of Malacca"], 
+                     "answer": "Bering Strait"},
+                ],
+                "Hard": [
+                    {"question": "What is the world's largest active volcano?", 
+                     "options": ["Mount Etna", "Mount Vesuvius", "Mauna Loa", "Mount Fuji"], 
+                     "answer": "Mauna Loa"},
+                    {"question": "Which country has the most time zones?", 
+                     "options": ["Russia", "United States", "France", "Australia"], 
+                     "answer": "France"},
+                    {"question": "What is the largest desert in the world?", 
+                     "options": ["Sahara", "Arabian", "Antarctic", "Gobi"], 
+                     "answer": "Antarctic"},
+                    {"question": "The city of Timbuktu is located in which country?", 
+                     "options": ["Nigeria", "Mali", "Ethiopia", "Chad"], 
+                     "answer": "Mali"},
+                    {"question": "What percentage of the River Nile runs through Egypt?", 
+                     "options": ["22%", "33%", "48%", "75%"], 
+                     "answer": "22%"},
+                ],
+            },
+            "History": {
+                "Easy": [
+                    {"question": "Who was the first President of the United States?", 
+                     "options": ["Thomas Jefferson", "Abraham Lincoln", "George Washington", "John Adams"], 
+                     "answer": "George Washington"},
+                    {"question": "In which year did World War II end?", 
+                     "options": ["1943", "1945", "1947", "1950"], 
+                     "answer": "1945"},
+                    {"question": "Which ancient civilization built the pyramids?", 
+                     "options": ["Romans", "Greeks", "Egyptians", "Mayans"], 
+                     "answer": "Egyptians"},
+                    {"question": "Who was the famous nurse during the Crimean War?", 
+                     "options": ["Clara Barton", "Florence Nightingale", "Marie Curie", "Susan B. Anthony"], 
+                     "answer": "Florence Nightingale"},
+                    {"question": "The Renaissance period began in which country?", 
+                     "options": ["France", "Italy", "England", "Spain"], 
+                     "answer": "Italy"},
+                ],
+                "Average": [
+                    {"question": "Who was the leader of the Soviet Union during the Cuban Missile Crisis?", 
+                     "options": ["Lenin", "Stalin", "Khrushchev", "Gorbachev"], 
+                     "answer": "Khrushchev"},
+                    {"question": "Which year did the Berlin Wall fall?", 
+                     "options": ["1987", "1989", "1991", "1993"], 
+                     "answer": "1989"},
+                    {"question": "The Battle of Hastings took place in which year?", 
+                     "options": ["1066", "1086", "1106", "1166"], 
+                     "answer": "1066"},
+                    {"question": "Who was the last Pharaoh of Ancient Egypt?", 
+                     "options": ["Nefertiti", "Cleopatra", "Hatshepsut", "Ramses"], 
+                     "answer": "Cleopatra"},
+                    {"question": "Which disease ravaged Europe in the 14th century?", 
+                     "options": ["Smallpox", "Black Death", "Cholera", "Typhoid Fever"], 
+                     "answer": "Black Death"},
+                ],
+                "Hard": [
+                    {"question": "During which battle was the HMS Victory commanded by Lord Nelson?", 
+                     "options": ["Battle of the Nile", "Battle of Trafalgar", "Battle of Copenhagen", "Battle of Cape St. Vincent"], 
+                     "answer": "Battle of Trafalgar"},
+                    {"question": "Who was the last Emperor of Russia?", 
+                     "options": ["Nicholas II", "Alexander III", "Ivan the Terrible", "Peter the Great"], 
+                     "answer": "Nicholas II"},
+                    {"question": "The Defenestration of Prague helped trigger which conflict?", 
+                     "options": ["Seven Years' War", "Hundred Years' War", "Thirty Years' War", "War of Spanish Succession"], 
+                     "answer": "Thirty Years' War"},
+                    {"question": "Who was the first female Prime Minister of India?", 
+                     "options": ["Benazir Bhutto", "Sirimavo Bandaranaike", "Golda Meir", "Indira Gandhi"], 
+                     "answer": "Indira Gandhi"},
+                    {"question": "Which ancient empire was ruled by Darius I?", 
+                     "options": ["Roman", "Greek", "Persian", "Babylonian"], 
+                     "answer": "Persian"},
+                ],
+            },
+            "Science": {
+                "Easy": [
+                    {"question": "What is the chemical symbol for gold?", 
+                     "options": ["Gd", "Go", "Au", "Ag"], 
+                     "answer": "Au"},
+                    {"question": "Which planet is known as the Red Planet?", 
+                     "options": ["Jupiter", "Venus", "Mars", "Saturn"], 
+                     "answer": "Mars"},
+                    {"question": "What is the main component of air?", 
+                     "options": ["Oxygen", "Nitrogen", "Carbon Dioxide", "Hydrogen"], 
+                     "answer": "Nitrogen"},
+                    {"question": "How many bones are in the adult human body?", 
+                     "options": ["106", "206", "306", "406"], 
+                     "answer": "206"},
+                    {"question": "What is the hardest natural substance on Earth?", 
+                     "options": ["Platinum", "Steel", "Diamond", "Titanium"], 
+                     "answer": "Diamond"},
+                ],
+                "Average": [
+                    {"question": "What is the speed of light in a vacuum?", 
+                     "options": ["299,792 km/s", "199,792 km/s", "399,792 km/s", "499,792 km/s"], 
+                     "answer": "299,792 km/s"},
+                    {"question": "Which element has the atomic number 1?", 
+                     "options": ["Helium", "Hydrogen", "Lithium", "Carbon"], 
+                     "answer": "Hydrogen"},
+                    {"question": "What is the powerhouse of the cell?", 
+                     "options": ["Nucleus", "Ribosome", "Mitochondria", "Endoplasmic reticulum"], 
+                     "answer": "Mitochondria"},
+                    {"question": "What is the unit of electrical resistance?", 
+                     "options": ["Volt", "Ampere", "Watt", "Ohm"], 
+                     "answer": "Ohm"},
+                    {"question": "Who formulated the theory of relativity?", 
+                     "options": ["Isaac Newton", "Albert Einstein", "Niels Bohr", "Galileo Galilei"], 
+                     "answer": "Albert Einstein"},
+                ],
+                "Hard": [
+                    {"question": "What is the name of the process by which plants make their food?", 
+                     "options": ["Respiration", "Photosynthesis", "Fermentation", "Digestion"], 
+                     "answer": "Photosynthesis"},
+                    {"question": "Which part of the human brain is responsible for balance and coordination?", 
+                     "options": ["Cerebrum", "Cerebellum", "Medulla", "Thalamus"], 
+                     "answer": "Cerebellum"},
+                    {"question": "What is the half-life of Carbon-14?", 
+                     "options": ["3,700 years", "5,730 years", "7,500 years", "10,300 years"], 
+                     "answer": "5,730 years"},
+                    {"question": "Which scientist discovered penicillin?", 
+                     "options": ["Louis Pasteur", "Alexander Fleming", "Joseph Lister", "Robert Koch"], 
+                     "answer": "Alexander Fleming"},
+                    {"question": "What is the most abundant element in the universe?", 
+                     "options": ["Hydrogen", "Helium", "Oxygen", "Carbon"], 
+                     "answer": "Hydrogen"},
+                ],
+            }
+        }
+        
+        # Start keyboard listener
+        self.listener = keyboard.Listener(on_press=self.on_key_press)
+        self.listener.start()
+    
+    def clear_screen(self):
+        """Clear the terminal screen."""
+        if name == 'nt':  # for Windows
+            _ = system('cls')
+        else:  # for Mac and Linux
+            _ = system('clear')
+    
+    def on_key_press(self, key):
+        """Handle keyboard input."""
+        try:
+            # Menu navigation
+            if self.in_menu:
+                if key == keyboard.Key.right:
+                    self.menu_index = (self.menu_index + 1) % len(self.menu_options)
+                    self.display_menu()
+                elif key == keyboard.Key.enter:
+                    selection = self.menu_options[self.menu_index]
+                    if selection == "Exit":
+                        self.running = False
+                    else:
+                        self.current_category = selection
+                        self.start_category()
             
-            break
-        elif key == 'r':
-            return 'restart'
-        elif key == 'u':
-            return 'redo'
-
-# Main game loop
-def main():
-    while True:
-        result = menu()
-        if result == 'exit':
-            listener.stop()
-            break
-        elif result == 'restart':
-            continue
+            # Question answering
+            elif self.in_question and self.timer_active:
+                if hasattr(key, 'char') and key.char in ['a', 'b', 'c', 'd']:
+                    self.user_selection = key.char
+                    # Print confirmation of selection
+                    print(f"\nYou selected: {key.char}")
+                    sys.stdout.flush()
+                elif hasattr(key, 'char') and key.char == 'r':  # Restart
+                    self.stop_timer()
+                    self.restart_game()
+                elif key == keyboard.Key.enter:
+                    if self.user_selection is not None:
+                        self.stop_timer()
+                        self.check_answer()
+                    else:
+                        print("\nPlease select an answer (a, b, c, d) first!")
+                        sys.stdout.flush()
+            
+            # Post-question options
+            elif self.waiting_for_post_action:
+                if hasattr(key, 'char') and key.char == 'r':  # Restart
+                    self.restart_game()
+                elif hasattr(key, 'char') and key.char == 'u' and not self.last_correct:  # Redo option
+                    self.waiting_for_post_action = False
+                    self.redo_question()
+                elif key == keyboard.Key.enter:  # Continue
+                    self.waiting_for_post_action = False
+                    self.next_question()
+                    
+        except (AttributeError, TypeError) as e:
+            print(f"\nKey error: {e}")  # Helpful for debugging
+            pass  # Ignore special keys
+    
+    def display_menu(self):
+        """Display the main menu."""
+        self.clear_screen()
+        print("==== TRIVIA GAME ====")
+        print("Navigate using right arrow key, select with Enter\n")
+        
+        for i, option in enumerate(self.menu_options):
+            if i == self.menu_index:
+                print(f"> {option} <")
+            else:
+                print(f"  {option}  ")
+    
+    def start_category(self):
+        """Start playing the selected category."""
+        self.in_menu = False
+        self.current_score = 0
+        
+        # Create a list of questions for all difficulty levels
+        self.questions_in_round = []
+        for difficulty in self.difficulty_levels:
+            questions = self.questions[self.current_category][difficulty].copy()
+            random.shuffle(questions)
+            for question in questions[:5]:  # Take only 5 questions from each difficulty
+                question_copy = question.copy()
+                question_copy["difficulty"] = difficulty
+                self.questions_in_round.append(question_copy)
+        
+        self.current_question_index = 0
+        self.display_question()
+    
+    def display_question(self):
+        """Display a question to the user."""
+        self.clear_screen()
+        self.in_question = True
+        self.user_selection = None
+        self.waiting_for_post_action = False
+        
+        if self.current_question_index >= len(self.questions_in_round):
+            self.end_round()
+            return
+        
+        # Get current question
+        question_data = self.questions_in_round[self.current_question_index]
+        self.current_difficulty = question_data["difficulty"]
+        
+        # Shuffle options
+        options = question_data["options"].copy()
+        random.shuffle(options)
+        
+        # Store the shuffled options to check answer
+        self.current_options = options
+        self.current_answer = question_data["answer"]
+        
+        # Display question info
+        print(f"==== {self.current_category} - {self.current_difficulty} ====")
+        print(f"Question {self.current_question_index + 1}/{len(self.questions_in_round)}")
+        print(f"Score: {self.current_score}\n")
+        
+        # Display question and options
+        print(question_data["question"])
+        print("a) " + options[0])
+        print("b) " + options[1])
+        print("c) " + options[2])
+        print("d) " + options[3])
+        print("\nSelect your answer (a, b, c, d) and press Enter to confirm.")
+        print("Time remaining: Starting...", end="")
+        sys.stdout.flush()
+        
+        # Start timer
+        self.time_remaining = 15 if not self.halved_timer else 7.5
+        self.start_timer()
+    
+    def start_timer(self):
+        """Start the timer for the question."""
+        self.timer_active = True
+        self.timer_thread = threading.Thread(target=self.countdown_timer)
+        self.timer_thread.daemon = True
+        self.timer_thread.start()
+    
+    def stop_timer(self):
+        """Stop the timer."""
+        self.timer_active = False
+        if self.timer_thread and self.timer_thread.is_alive():
+            # Let the thread finish naturally
+            pass
+    
+    def countdown_timer(self):
+        """Countdown timer for the question with continuous display update."""
+        start_time = time.time()
+        end_time = start_time + self.time_remaining
+        
+        while time.time() < end_time and self.timer_active:
+            # Calculate remaining time
+            self.time_remaining = end_time - time.time()
+            
+            # Update the display
+            self.update_display_during_timer()
+            
+            # Sleep a short time
+            time.sleep(0.1)
+        
+        if self.timer_active:  # If timer finished naturally (not stopped)
+            self.timer_active = False
+            self.timeout()
+    
+    def update_display_during_timer(self):
+        """Update the display while the timer is running."""
+        self.clear_screen()
+        
+        # Get current question
+        question_data = self.questions_in_round[self.current_question_index]
+        
+        # Display question info
+        print(f"==== {self.current_category} - {self.current_difficulty} ====")
+        print(f"Question {self.current_question_index + 1}/{len(self.questions_in_round)}")
+        print(f"Score: {self.current_score}\n")
+        
+        # Display question and options
+        print(question_data["question"])
+        
+        # Show options, highlight selected one if any
+        for i, option in enumerate(['a', 'b', 'c', 'd']):
+            if option == self.user_selection:
+                print(f"▶ {option}) {self.current_options[i]}")
+            else:
+                print(f"  {option}) {self.current_options[i]}")
+        
+        print("\nSelect your answer (a, b, c, d) and press Enter to confirm.")
+        print(f"Time remaining: {self.time_remaining:.1f} seconds")
+        if self.user_selection:
+            print(f"Current selection: {self.user_selection}")
+        sys.stdout.flush()  # Ensure the display is updated
+    
+    def timeout(self):
+        """Handle timeout for a question."""
+        self.clear_screen()
+        print("==== Time's up! ====")
+        
+        question_data = self.questions_in_round[self.current_question_index]
+        print(f"\nQuestion: {question_data['question']}")
+        print(f"The correct answer was: {self.current_answer}\n")
+        
+        print(f"Your score: {self.current_score}")
+        print("\nOptions:")
+        print("r - Restart")
+        print("u - Redo this question (time will be halved)")
+        print("Enter - Continue to next question")
+        
+        self.last_correct = False
+        self.waiting_for_post_action = True
+    
+    def check_answer(self):
+        """Check the user's answer."""
+        self.clear_screen()
+        
+        # Map user selection to option index
+        option_index = ord(self.user_selection) - ord('a')
+        selected_option = self.current_options[option_index]
+        
+        # Get question data
+        question_data = self.questions_in_round[self.current_question_index]
+        
+        # Display the question again
+        print(f"\nQuestion: {question_data['question']}")
+        
+        # Check if answer is correct
+        is_correct = selected_option == self.current_answer
+        self.last_correct = is_correct
+        
+        # Update score
+        if is_correct:
+            points = 5 if self.current_difficulty == "Easy" else (10 if self.current_difficulty == "Average" else 15)
+            self.current_score += points
+            print("Correct! 🎉")
         else:
-            category = result
-            quiz_result = run_quiz(category)
-            if quiz_result == 'restart':
-                continue
+            print("Wrong answer!")
+            print(f"You selected: {selected_option}")
+            print(f"The correct answer was: {self.current_answer}")
+        
+        print(f"\nYour score: {self.current_score}")
+        
+        # Reset halved timer flag for next question
+        if is_correct:
+            self.halved_timer = False
+            print("\nOptions:")
+            print("r - Restart")
+            print("Enter - Continue to next question")
+        else:
+            print("\nOptions:")
+            print("r - Restart")
+            print("u - Redo this question (time will be halved)")
+            print("Enter - Continue to next question")
+        
+        self.waiting_for_post_action = True
+    
+    def redo_question(self):
+        """Redo the current question with halved time."""
+        self.halved_timer = True
+        self.user_selection = None
+        self.display_question()
+    
+    def next_question(self):
+        """Move to the next question."""
+        self.current_question_index += 1
+        self.user_selection = None
+        self.halved_timer = False
+        self.display_question()
+    
+    def end_round(self):
+        """End the current round."""
+        self.clear_screen()
+        print(f"==== {self.current_category} Round Complete! ====")
+        
+        # Calculate maximum possible score
+        max_score = 0
+        for difficulty in self.difficulty_levels:
+            if difficulty == "Easy":
+                max_score += 5 * 5  # 5 questions × 5 points
+            elif difficulty == "Average":
+                max_score += 5 * 10  # 5 questions × 10 points
+            else:  # Hard
+                max_score += 5 * 15  # 5 questions × 15 points
+        
+        print(f"Final Score: {self.current_score}/{max_score}")
+        print("\nPress Enter to return to the main menu.")
+        
+        self.waiting_for_post_action = True
+        
+        # Wait for keyboard input in the listener thread
+        while self.waiting_for_post_action and self.running:
+            time.sleep(0.1)
+        
+        self.in_menu = True
+        self.display_menu()
+    
+    def restart_game(self):
+        """Restart the game."""
+        self.in_menu = True
+        self.current_score = 0
+        self.current_question_index = 0
+        self.halved_timer = False
+        self.waiting_for_post_action = False
+        self.display_menu()
+    
+    def run(self):
+        """Main game loop."""  # 500 lines anniversary
+        self.display_menu()
+        
+        while self.running:
+            time.sleep(0.1)  # Prevent high CPU usage
 
-if __name__ == '__main__':
-    main()
+# Run the game
+if __name__ == "__main__":
+    game = TriviaGame()
+    game.run()
