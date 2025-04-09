@@ -1,4 +1,3 @@
-# I hope this is the last version
 import time
 import random
 import threading
@@ -25,6 +24,7 @@ class TriviaGame:
         self.last_correct = False
         self.timer_active = False
         self.waiting_for_post_action = False
+        self.round_complete = False  # New flag for round completion state
         
         # Menu options
         self.menu_options = ["Geography", "History", "Science", "Exit"]
@@ -220,6 +220,15 @@ class TriviaGame:
                         self.current_category = selection
                         self.start_category()
             
+            # Round complete screen
+            elif self.round_complete:
+                if key == keyboard.Key.enter:
+                    print("\nReturning to main menu...")
+                    sys.stdout.flush()
+                    self.round_complete = False
+                    self.in_menu = True
+                    self.display_menu()
+            
             # Question answering
             elif self.in_question and self.timer_active:
                 if hasattr(key, 'char') and key.char in ['a', 'b', 'c', 'd']:
@@ -251,7 +260,6 @@ class TriviaGame:
                     
         except (AttributeError, TypeError) as e:
             print(f"\nKey error: {e}")  # Helpful for debugging
-            pass  # Ignore special keys
     
     def display_menu(self):
         """Display the main menu."""
@@ -268,6 +276,7 @@ class TriviaGame:
     def start_category(self):
         """Start playing the selected category."""
         self.in_menu = False
+        self.round_complete = False
         self.current_score = 0
         
         # Create a list of questions for all difficulty levels
@@ -464,7 +473,9 @@ class TriviaGame:
     def end_round(self):
         """End the current round."""
         self.clear_screen()
-        print(f"==== {self.current_category} Round Complete! ====")
+        self.in_question = False
+        self.waiting_for_post_action = False
+        self.round_complete = True  # Set the round complete flag
         
         # Calculate maximum possible score
         max_score = 0
@@ -476,21 +487,16 @@ class TriviaGame:
             else:  # Hard
                 max_score += 5 * 15  # 5 questions × 15 points
         
+        print(f"==== {self.current_category} Round Complete! ====")
         print(f"Final Score: {self.current_score}/{max_score}")
         print("\nPress Enter to return to the main menu.")
-        
-        self.waiting_for_post_action = True
-        
-        # Wait for keyboard input in the listener thread
-        while self.waiting_for_post_action and self.running:
-            time.sleep(0.1)
-        
-        self.in_menu = True
-        self.display_menu()
+        print("(Press any key to see this message)")
+        sys.stdout.flush()
     
-    def restart_game(self):
+    def restart_game(self):  
         """Restart the game."""
         self.in_menu = True
+        self.round_complete = False
         self.current_score = 0
         self.current_question_index = 0
         self.halved_timer = False
@@ -498,7 +504,7 @@ class TriviaGame:
         self.display_menu()
     
     def run(self):
-        """Main game loop."""  # 500 lines anniversary
+        """Main game loop."""
         self.display_menu()
         
         while self.running:
