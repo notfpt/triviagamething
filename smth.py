@@ -20,11 +20,13 @@ class TriviaGame:
         self.timer_thread = None
         self.time_remaining = 15
         self.halved_timer = False
+        self.next_question_halved = False  # Flag for next question halved timer
         self.user_selection = None
         self.last_correct = False
         self.timer_active = False
         self.waiting_for_post_action = False
-        self.round_complete = False  # New flag for round completion state
+        self.round_complete = False  # Flag for round completion state
+        self.lives_remaining = 3  # New life counter for undos
         
         # Menu options
         self.menu_options = ["Geography", "History", "Science", "Exit"]
@@ -251,7 +253,7 @@ class TriviaGame:
             elif self.waiting_for_post_action:
                 if hasattr(key, 'char') and key.char == 'r':  # Restart
                     self.restart_game()
-                elif hasattr(key, 'char') and key.char == 'u' and not self.last_correct:  # Redo option
+                elif hasattr(key, 'char') and key.char == 'u' and not self.last_correct and self.lives_remaining > 0:  # Redo option
                     self.waiting_for_post_action = False
                     self.redo_question()
                 elif key == keyboard.Key.enter:  # Continue
@@ -278,6 +280,9 @@ class TriviaGame:
         self.in_menu = False
         self.round_complete = False
         self.current_score = 0
+        self.lives_remaining = 3  # Reset lives at start of category
+        self.halved_timer = False
+        self.next_question_halved = False
         
         # Create a list of questions for all difficulty levels
         self.questions_in_round = []
@@ -318,7 +323,8 @@ class TriviaGame:
         # Display question info
         print(f"==== {self.current_category} - {self.current_difficulty} ====")
         print(f"Question {self.current_question_index + 1}/{len(self.questions_in_round)}")
-        print(f"Score: {self.current_score}\n")
+        print(f"Score: {self.current_score}")
+        print(f"Lives remaining: {self.lives_remaining}\n")
         
         # Display question and options
         print(question_data["question"])
@@ -327,11 +333,21 @@ class TriviaGame:
         print("c) " + options[2])
         print("d) " + options[3])
         print("\nSelect your answer (a, b, c, d) and press Enter to confirm.")
-        print("Time remaining: Starting...", end="")
+        
+        # Apply timer settings
+        if self.halved_timer or self.next_question_halved:
+            self.time_remaining = 7.5
+            timer_status = "Time remaining: Starting... (Half time!)"
+            # Reset next_question_halved after applying it
+            self.next_question_halved = False
+        else:
+            self.time_remaining = 15
+            timer_status = "Time remaining: Starting..."
+            
+        print(timer_status, end="")
         sys.stdout.flush()
         
         # Start timer
-        self.time_remaining = 15 if not self.halved_timer else 7.5
         self.start_timer()
     
     def start_timer(self):
@@ -377,7 +393,8 @@ class TriviaGame:
         # Display question info
         print(f"==== {self.current_category} - {self.current_difficulty} ====")
         print(f"Question {self.current_question_index + 1}/{len(self.questions_in_round)}")
-        print(f"Score: {self.current_score}\n")
+        print(f"Score: {self.current_score}")
+        print(f"Lives remaining: {self.lives_remaining}\n")
         
         # Display question and options
         print(question_data["question"])
@@ -390,7 +407,13 @@ class TriviaGame:
                 print(f"  {option}) {self.current_options[i]}")
         
         print("\nSelect your answer (a, b, c, d) and press Enter to confirm.")
-        print(f"Time remaining: {self.time_remaining:.1f} seconds")
+        
+        # Display timer status with indication if it's halved
+        if self.halved_timer or self.next_question_halved:
+            print(f"Time remaining: {self.time_remaining:.1f} seconds (Half time!)")
+        else:
+            print(f"Time remaining: {self.time_remaining:.1f} seconds")
+            
         if self.user_selection:
             print(f"Current selection: {self.user_selection}")
         sys.stdout.flush()  # Ensure the display is updated
@@ -405,9 +428,16 @@ class TriviaGame:
         print(f"The correct answer was: {self.current_answer}\n")
         
         print(f"Your score: {self.current_score}")
+        print(f"Lives remaining: {self.lives_remaining}")
         print("\nOptions:")
         print("r - Restart")
-        print("u - Redo this question (time will be halved)")
+        
+        # Only show redo option if lives remain
+        if self.lives_remaining > 0:
+            print("u - Redo this question (time will be halved for this and next question)")
+        else:
+            print("No lives remaining to redo questions")
+            
         print("Enter - Continue to next question")
         
         self.last_correct = False
@@ -436,30 +466,34 @@ class TriviaGame:
             points = 5 if self.current_difficulty == "Easy" else (10 if self.current_difficulty == "Average" else 15)
             self.current_score += points
             print("Correct! 🎉")
+            # Reset halved timer flag if answer is correct
+            self.halved_timer = False
         else:
             print("Wrong answer!")
             print(f"You selected: {selected_option}")
             print(f"The correct answer was: {self.current_answer}")
         
         print(f"\nYour score: {self.current_score}")
+        print(f"Lives remaining: {self.lives_remaining}")
         
-        # Reset halved timer flag for next question
-        if is_correct:
-            self.halved_timer = False
-            print("\nOptions:")
-            print("r - Restart")
-            print("Enter - Continue to next question")
-        else:
-            print("\nOptions:")
-            print("r - Restart")
-            print("u - Redo this question (time will be halved)")
-            print("Enter - Continue to next question")
+        print("\nOptions:")
+        print("r - Restart")
+        
+        # Only show redo option for incorrect answers and if lives remain
+        if not is_correct and self.lives_remaining > 0:
+            print("u - Redo this question (time will be halved for this and next question)")
+        elif not is_correct and self.lives_remaining == 0:
+            print("No lives remaining to redo questions")
+            
+        print("Enter - Continue to next question")
         
         self.waiting_for_post_action = True
     
     def redo_question(self):
-        """Redo the current question with halved time."""
-        self.halved_timer = True
+        """Redo the current question with halved time and use a life."""
+        self.lives_remaining -= 1  # Use up a life
+        self.halved_timer = True   # Halve the timer for current question
+        self.next_question_halved = True  # Halve the timer for next question too
         self.user_selection = None
         self.display_question()
     
@@ -467,7 +501,8 @@ class TriviaGame:
         """Move to the next question."""
         self.current_question_index += 1
         self.user_selection = None
-        self.halved_timer = False
+        self.halved_timer = self.next_question_halved  # Apply the halved timer if set
+        self.next_question_halved = False  # Reset the flag
         self.display_question()
     
     def end_round(self):
@@ -489,6 +524,7 @@ class TriviaGame:
         
         print(f"==== {self.current_category} Round Complete! ====")
         print(f"Final Score: {self.current_score}/{max_score}")
+        print(f"Lives remaining: {self.lives_remaining}")
         print("\nPress Enter to return to the main menu.")
         print("(Press any key to see this message)")
         sys.stdout.flush()
@@ -500,6 +536,8 @@ class TriviaGame:
         self.current_score = 0
         self.current_question_index = 0
         self.halved_timer = False
+        self.next_question_halved = False
+        self.lives_remaining = 3  # Reset lives
         self.waiting_for_post_action = False
         self.display_menu()
     
