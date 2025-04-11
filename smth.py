@@ -17,6 +17,8 @@ class TriviaGame:
         self.current_difficulty = ""
         self.current_question_index = 0
         self.questions_in_round = []
+        self.skipped_questions = []  # List to store indices of skipped questions
+        self.skipped_times = {}  # Dictionary to store remaining times for skipped questions
         self.timer_thread = None
         self.time_remaining = 15
         self.halved_timer = False
@@ -26,7 +28,9 @@ class TriviaGame:
         self.timer_active = False
         self.waiting_for_post_action = False
         self.round_complete = False  # Flag for round completion state
+        self.reviewing_skipped = False  # Flag for when we're reviewing skipped questions
         self.lives_remaining = 3  # New life counter for undos
+        self.display_updating = False  # Flag to prevent display update conflicts
         
         # Menu options
         self.menu_options = ["Geography", "History", "Science", "Exit"]
@@ -235,12 +239,15 @@ class TriviaGame:
             elif self.in_question and self.timer_active:
                 if hasattr(key, 'char') and key.char in ['a', 'b', 'c', 'd']:
                     self.user_selection = key.char
-                    # Print confirmation of selection
-                    print(f"\nYou selected: {key.char}")
-                    sys.stdout.flush()
+                    # Print confirmation of selection without clearing
+                    if not self.display_updating:
+                        self.update_display_during_timer()
                 elif hasattr(key, 'char') and key.char == 'r':  # Restart
                     self.stop_timer()
                     self.restart_game()
+                elif hasattr(key, 'char') and key.char == 's':  # Skip
+                    self.stop_timer()
+                    self.skip_question()
                 elif key == keyboard.Key.enter:
                     if self.user_selection is not None:
                         self.stop_timer()
@@ -283,6 +290,9 @@ class TriviaGame:
         self.lives_remaining = 3  # Reset lives at start of category
         self.halved_timer = False
         self.next_question_halved = False
+        self.skipped_questions = []  # Reset skipped questions
+        self.skipped_times = {}  # Reset skipped times
+        self.reviewing_skipped = False  # Reset reviewing flag
         
         # Create a list of questions for all difficulty levels
         self.questions_in_round = []
@@ -304,8 +314,13 @@ class TriviaGame:
         self.user_selection = None
         self.waiting_for_post_action = False
         
+        # Check if we've reached the end of regular questions
         if self.current_question_index >= len(self.questions_in_round):
-            self.end_round()
+            # If we have skipped questions and aren't already reviewing them
+            if self.skipped_questions and not self.reviewing_skipped:
+                self.start_skipped_review()
+            else:
+                self.end_round()
             return
         
         # Get current question
@@ -321,10 +336,15 @@ class TriviaGame:
         self.current_answer = question_data["answer"]
         
         # Display question info
-        print(f"==== {self.current_category} - {self.current_difficulty} ====")
+        if self.reviewing_skipped:
+            print(f"==== REVIEWING SKIPPED QUESTIONS - {self.current_category} - {self.current_difficulty} ====")
+        else:
+            print(f"==== {self.current_category} - {self.current_difficulty} ====")
+        
         print(f"Question {self.current_question_index + 1}/{len(self.questions_in_round)}")
         print(f"Score: {self.current_score}")
-        print(f"Lives remaining: {self.lives_remaining}\n")
+        print(f"Lives remaining: {self.lives_remaining}")
+        print(f"Skipped questions: {len(self.skipped_questions)}\n")
         
         # Display question and options
         print(question_data["question"])
@@ -334,18 +354,27 @@ class TriviaGame:
         print("d) " + options[3])
         print("\nSelect your answer (a, b, c, d) and press Enter to confirm.")
         
-        # Apply timer settings
-        if self.halved_timer or self.next_question_halved:
+        # Get the appropriate time remaining
+        if self.reviewing_skipped and self.current_question_index in self.skipped_times:
+            # Use the saved time for skipped questions
+            self.time_remaining = self.skipped_times[self.current_question_index]
+            timer_status = f"Time remaining: {self.time_remaining:.1f}s (Resumed)"
+        elif self.halved_timer or self.next_question_halved:
             self.time_remaining = 7.5
-            timer_status = "Time remaining: Starting... (Half time!)"
+            timer_status = "Time remaining: 7.5s (Half time!)"
             # Reset next_question_halved after applying it
             self.next_question_halved = False
         else:
             self.time_remaining = 15
-            timer_status = "Time remaining: Starting..."
+            timer_status = "Time remaining: 15.0s"
             
-        print(timer_status, end="")
+        # Add skip instruction
+        print(timer_status)
+        print("Press 's' to skip this question")
         sys.stdout.flush()
+        
+        # Add a brief delay before starting timer to ensure UI is stable
+        time.sleep(0.1)
         
         # Start timer
         self.start_timer()
@@ -353,6 +382,10 @@ class TriviaGame:
     def start_timer(self):
         """Start the timer for the question."""
         self.timer_active = True
+        # Make sure any previous timer is fully stopped
+        if self.timer_thread and self.timer_thread.is_alive():
+            time.sleep(0.2)
+            
         self.timer_thread = threading.Thread(target=self.countdown_timer)
         self.timer_thread.daemon = True
         self.timer_thread.start()
@@ -361,23 +394,30 @@ class TriviaGame:
         """Stop the timer."""
         self.timer_active = False
         if self.timer_thread and self.timer_thread.is_alive():
-            # Let the thread finish naturally
-            pass
+            # Let the thread finish naturally, but add a small delay to ensure it completes
+            time.sleep(0.2)
     
     def countdown_timer(self):
         """Countdown timer for the question with continuous display update."""
         start_time = time.time()
         end_time = start_time + self.time_remaining
         
+        # Add a small initial delay to ensure display is ready
+        time.sleep(0.2)
+        
+        # Use a less frequent update to reduce stuttering
+        update_interval = 0.1
+        
         while time.time() < end_time and self.timer_active:
             # Calculate remaining time
             self.time_remaining = end_time - time.time()
             
-            # Update the display
-            self.update_display_during_timer()
+            # Only update if not already updating
+            if not self.display_updating:
+                self.update_display_during_timer()
             
             # Sleep a short time
-            time.sleep(0.1)
+            time.sleep(update_interval)
         
         if self.timer_active:  # If timer finished naturally (not stopped)
             self.timer_active = False
@@ -385,16 +425,22 @@ class TriviaGame:
     
     def update_display_during_timer(self):
         """Update the display while the timer is running."""
+        self.display_updating = True
         self.clear_screen()
         
         # Get current question
         question_data = self.questions_in_round[self.current_question_index]
         
         # Display question info
-        print(f"==== {self.current_category} - {self.current_difficulty} ====")
+        if self.reviewing_skipped:
+            print(f"==== REVIEWING SKIPPED QUESTIONS - {self.current_category} - {self.current_difficulty} ====")
+        else:
+            print(f"==== {self.current_category} - {self.current_difficulty} ====")
+            
         print(f"Question {self.current_question_index + 1}/{len(self.questions_in_round)}")
         print(f"Score: {self.current_score}")
-        print(f"Lives remaining: {self.lives_remaining}\n")
+        print(f"Lives remaining: {self.lives_remaining}")
+        print(f"Skipped questions: {len(self.skipped_questions)}\n")
         
         # Display question and options
         print(question_data["question"])
@@ -408,15 +454,50 @@ class TriviaGame:
         
         print("\nSelect your answer (a, b, c, d) and press Enter to confirm.")
         
-        # Display timer status with indication if it's halved
-        if self.halved_timer or self.next_question_halved:
+        # Display timer status with indication if it's halved or resumed
+        if self.reviewing_skipped:
+            print(f"Time remaining: {self.time_remaining:.1f} seconds (Resumed)")
+        elif self.halved_timer or self.next_question_halved:
             print(f"Time remaining: {self.time_remaining:.1f} seconds (Half time!)")
         else:
             print(f"Time remaining: {self.time_remaining:.1f} seconds")
             
+        # Add skip instruction
+        print("Press 's' to skip this question")
+            
         if self.user_selection:
             print(f"Current selection: {self.user_selection}")
         sys.stdout.flush()  # Ensure the display is updated
+        self.display_updating = False
+    
+    def skip_question(self):
+        """Skip the current question and save its remaining time."""
+        # Save the current question index in the skipped list
+        if self.current_question_index not in self.skipped_questions:
+            self.skipped_questions.append(self.current_question_index)
+            
+        # Save the remaining time for this question
+        self.skipped_times[self.current_question_index] = self.time_remaining
+        
+        self.clear_screen()
+        print(f"Question skipped! Remaining time ({self.time_remaining:.1f}s) saved.")
+        print(f"You have {len(self.skipped_questions)} skipped question(s).")
+        print("You will be able to answer skipped questions after all other questions.")
+        print("\nPress Enter to continue...")
+        sys.stdout.flush()
+        
+        # Wait for user to press Enter
+        input()
+        
+        # Move to the next question
+        self.next_question()
+    
+    def start_skipped_review(self):
+        """Start reviewing skipped questions."""
+        self.reviewing_skipped = True
+        self.current_question_index = self.skipped_questions[0]  # Get first skipped question
+        self.skipped_questions.pop(0)  # Remove from skipped list
+        self.display_question()
     
     def timeout(self):
         """Handle timeout for a question."""
@@ -439,6 +520,7 @@ class TriviaGame:
             print("No lives remaining to redo questions")
             
         print("Enter - Continue to next question")
+        sys.stdout.flush()
         
         self.last_correct = False
         self.waiting_for_post_action = True
@@ -486,6 +568,7 @@ class TriviaGame:
             print("No lives remaining to redo questions")
             
         print("Enter - Continue to next question")
+        sys.stdout.flush()
         
         self.waiting_for_post_action = True
     
@@ -499,10 +582,30 @@ class TriviaGame:
     
     def next_question(self):
         """Move to the next question."""
-        self.current_question_index += 1
+        # Ensure any active timer is fully stopped
+        self.stop_timer()
+        
+        if self.reviewing_skipped:
+            # If there are more skipped questions
+            if self.skipped_questions:
+                self.current_question_index = self.skipped_questions[0]
+                self.skipped_questions.pop(0)
+            else:
+                # All skipped questions have been reviewed, end the round
+                self.reviewing_skipped = False
+                self.current_question_index = len(self.questions_in_round)
+                self.end_round()
+                return
+        else:
+            # Move to next regular question
+            self.current_question_index += 1
+        
         self.user_selection = None
         self.halved_timer = self.next_question_halved  # Apply the halved timer if set
         self.next_question_halved = False  # Reset the flag
+        
+        # Add a small delay before displaying the next question to ensure UI is stable
+        time.sleep(0.3)
         self.display_question()
     
     def end_round(self):
@@ -525,12 +628,19 @@ class TriviaGame:
         print(f"==== {self.current_category} Round Complete! ====")
         print(f"Final Score: {self.current_score}/{max_score}")
         print(f"Lives remaining: {self.lives_remaining}")
+        
+        if self.skipped_questions:
+            print(f"Skipped questions not answered: {len(self.skipped_questions)}")
+        
         print("\nPress Enter to return to the main menu.")
         print("(Press any key to see this message)")
         sys.stdout.flush()
     
     def restart_game(self):  
         """Restart the game."""
+        # Ensure any active timer is fully stopped
+        self.stop_timer()
+        
         self.in_menu = True
         self.round_complete = False
         self.current_score = 0
@@ -539,6 +649,12 @@ class TriviaGame:
         self.next_question_halved = False
         self.lives_remaining = 3  # Reset lives
         self.waiting_for_post_action = False
+        self.skipped_questions = []  # Reset skipped questions
+        self.skipped_times = {}  # Reset skipped times
+        self.reviewing_skipped = False  # Reset reviewing flag
+        
+        # Give a small delay for stability
+        time.sleep(0.1)
         self.display_menu()
     
     def run(self):
@@ -546,7 +662,7 @@ class TriviaGame:
         self.display_menu()
         
         while self.running:
-            time.sleep(0.1)  # Prevent high CPU usage
+            time.sleep(0.05)  # Prevent high CPU usage
 
 # Run the game
 if __name__ == "__main__":
