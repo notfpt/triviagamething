@@ -547,7 +547,7 @@ class TriviaGame:
         if is_correct:
             points = 5 if self.current_difficulty == "Easy" else (10 if self.current_difficulty == "Average" else 15)
             self.current_score += points
-            print("Correct! 🎉")
+            print("Correct!")
             # Reset halved timer flag if answer is correct
             self.halved_timer = False
         else:
